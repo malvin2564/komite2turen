@@ -1,0 +1,166 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: students
+    // Fields:
+    //   - name: string (required)
+    //   - class: string (required)
+    //   - status: string (regular, yatim, keringanan)
+    //   - discountAmount: number
+    //   - previousBalance: number
+    //   - createdAt: timestamp
+    //
+    // Collection: payments
+    // Fields:
+    //   - studentId: string (required)
+    //   - studentName: string
+    //   - studentClass: string
+    //   - date: timestamp (required)
+    //   - totalAmount: number (required)
+    //   - monthsCovered: number
+    //   - type: string (full, noRekreasi, onlyRekreasi)
+    //   - isPreviousBalance: bool
+    //   - allocations: map
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      let isMaster = request.auth.token.email == "m.alvin2564@admin.smp.belajar.id";
+      let settingsDoc = get(/databases/$(database)/documents/settings/defaults);
+      let isDynamicAdmin = settingsDoc != null && 'adminEmails' in settingsDoc.data && request.auth.token.email in settingsDoc.data.adminEmails;
+      return isAuthenticated() && (isMaster || isDynamicAdmin);
+    }
+
+    function isValidArrearsDetail(detail) {
+      return detail is number || (
+        detail is map &&
+        detail.months is number &&
+        detail.monthlyRate is number &&
+        detail.total is number
+      );
+    }
+
+    function isSupervisor() {
+      let settingsDoc = get(/databases/$(database)/documents/settings/defaults);
+      return isAuthenticated() &&
+             settingsDoc != null && 
+             'supervisorEmails' in settingsDoc.data &&
+             request.auth.token.email in settingsDoc.data.supervisorEmails;
+    }
+
+    function isValidStudent(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.class is string && data.class.size() > 0 && data.class.size() < 20 &&
+             data.status in ['regular', 'yatim', 'keringanan', 'keluar', 'lulus', 'pindahan'] &&
+             data.isActive is bool &&
+             (!('nis' in data) || (data.nis is string && data.nis.size() < 50)) &&
+             (!('discountAmount' in data) || data.discountAmount is number) &&
+             (!('customMonthlyAmount' in data) || data.customMonthlyAmount is number) &&
+             (!('historicalMonthlyAmount' in data) || data.historicalMonthlyAmount is number) &&
+             (!('historicalAllocations' in data) || data.historicalAllocations is list) &&
+             (!('arrears' in data) || (
+               data.arrears is map &&
+               (!('class7' in data.arrears) || isValidArrearsDetail(data.arrears.class7)) &&
+               (!('class8' in data.arrears) || isValidArrearsDetail(data.arrears.class8)) &&
+               (!('class9' in data.arrears) || isValidArrearsDetail(data.arrears.class9))
+             ));
+    }
+
+    function isValidPayment(data) {
+      return data.studentId is string && data.studentId.size() < 50 &&
+             data.totalAmount is number && data.totalAmount >= 0 &&
+             data.type in ['full', 'noRekreasi', 'onlyRekreasi', 'arrears'] &&
+             data.studentName is string && data.studentName.size() < 100 &&
+             data.studentClass is string && data.studentClass.size() < 20 &&
+             data.monthsCovered is number &&
+             data.isPreviousBalance is bool &&
+             data.allocations is map;
+    }
+
+    function isCashier() {
+      let settingsDoc = get(/databases/$(database)/documents/settings/defaults);
+      return isAuthenticated() &&
+             settingsDoc != null && 
+             'cashierEmails' in settingsDoc.data &&
+             request.auth.token.email in settingsDoc.data.cashierEmails;
+    }
+
+    function isValidSystemSettings(data) {
+      return data.currentAcademicYearId is string &&
+             (!('cashierEmails' in data) || data.cashierEmails is list) &&
+             (!('adminEmails' in data) || data.adminEmails is list) &&
+             (!('supervisorEmails' in data) || data.supervisorEmails is list);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /academic_years/{yearId} {
+      allow get, list: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+      
+      match /students/{studentId} {
+        allow get, list: if isAuthenticated();
+        // Admin can create/update fully. Cashiers (authenticated) can also update for arrears.
+        allow create: if isAdmin() && isValidStudent(request.resource.data);
+        allow update: if isAdmin() || isCashier();
+        allow delete: if isAdmin();
+      }
+
+      match /payments/{paymentId} {
+        allow get, list: if isAuthenticated();
+        allow create: if (isAdmin() || isCashier()) && isValidPayment(request.resource.data);
+        allow update, delete: if isAdmin();
+      }
+
+      match /classes/{classId} {
+        allow get, list: if isAuthenticated();
+        allow create, update, delete: if isAdmin();
+      }
+    }
+
+    match /students/{studentId} {
+      allow get, list: if isAuthenticated();
+      // Admin can create/update fully. Cashiers can also update for arrears.
+      allow create: if isAdmin() && isValidStudent(request.resource.data);
+      allow update: if isAdmin() || isCashier();
+      allow delete: if isAdmin();
+    }
+
+    match /payments/{paymentId} {
+      allow get, list: if isAuthenticated();
+      allow create: if (isAdmin() || isCashier()) && isValidPayment(request.resource.data);
+      allow update, delete: if isAdmin();
+    }
+
+    match /classes/{classId} {
+      allow get, list: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /alumni/{studentId} {
+      allow get, list: if isAuthenticated();
+      allow create: if isAdmin() && isValidStudent(request.resource.data);
+      allow update: if isAdmin() || isCashier();
+      allow delete: if isAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow get, list: if isAuthenticated();
+      allow write: if isAdmin() && isValidSystemSettings(request.resource.data);
+    }
+  }
+}

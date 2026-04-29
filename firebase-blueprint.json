@@ -1,0 +1,126 @@
+{
+  "entities": {
+    "Student": {
+      "title": "Student",
+      "description": "Data siswa yang terdaftar",
+      "type": "object",
+      "properties": {
+        "nis": { "type": "string", "description": "Nomor Induk Siswa (juga sebagai ID)" },
+        "name": { "type": "string", "description": "Nama lengkap siswa" },
+        "class": { "type": "string", "description": "Kelas saat ini (misal: 7A, 8B)" },
+        "status": { "type": "string", "enum": ["regular", "yatim", "keringanan", "keluar"], "description": "Status pembayaran siswa" },
+        "discountAmount": { "type": "number", "description": "Jumlah potongan jika status keringanan" },
+        "arrears": {
+          "type": "object",
+          "properties": {
+            "class7": { "type": "number" },
+            "class8": { "type": "number" },
+            "class9": { "type": "number" }
+          }
+        },
+        "arrearsMonths": { "type": "number", "description": "Jumlah bulan tunggakan" },
+        "isActive": { "type": "boolean", "description": "Apakah siswa masih aktif" },
+        "isTransfer": { "type": "boolean", "description": "Apakah siswa pindahan" },
+        "transferDate": { "type": "string", "format": "date", "description": "Tanggal pindah" },
+        "customMonthlyAmount": { "type": "number", "description": "Nominal pembayaran khusus" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["nis", "name", "class", "status"]
+    },
+    "Class": {
+      "title": "Class",
+      "description": "Daftar kelas yang valid",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Nama kelas (misal: 7A, 8B)" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Catatan transaksi pembayaran SPP",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string", "description": "ID siswa" },
+        "studentName": { "type": "string", "description": "Nama siswa (denormalized)" },
+        "studentClass": { "type": "string", "description": "Kelas siswa saat bayar" },
+        "date": { "type": "string", "format": "date-time", "description": "Tanggal pembayaran" },
+        "totalAmount": { "type": "number", "description": "Total uang yang dibayarkan" },
+        "monthsCovered": { "type": "number", "description": "Jumlah bulan yang tercover" },
+        "type": { "type": "string", "enum": ["full", "noRekreasi", "onlyRekreasi", "arrears"], "description": "Jenis pembayaran" },
+        "arrearsClass": { "type": "string", "enum": ["class7", "class8", "class9"], "description": "Kelas yang dibayar tunggakannya" },
+        "isPreviousBalance": { "type": "boolean", "description": "Apakah untuk membayar tunggakan kelas sebelumnya" },
+        "allocations": {
+          "type": "object",
+          "description": "Pecahan alokasi dana (dynamic keys based on settings)"
+        }
+      },
+      "required": ["studentId", "date", "totalAmount", "type"]
+    },
+    "SystemSettings": {
+      "title": "System Settings",
+      "description": "Konfigurasi default sistem",
+      "type": "object",
+      "properties": {
+        "defaultMonthlyAmount": { "type": "number" },
+        "allocations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "amount": { "type": "number" },
+              "priority": { "type": "number" },
+              "isTabungan": { "type": "boolean" }
+            }
+          }
+        }
+      },
+      "required": ["defaultMonthlyAmount", "allocations"]
+    }
+  },
+  "firestore": {
+    "/academic_years/{yearId}": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "isActive": { "type": "boolean" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "description": "Koleksi tahun ajaran"
+    },
+    "/academic_years/{yearId}/students/{studentId}": {
+      "schema": "Student",
+      "description": "Koleksi data siswa per tahun ajaran"
+    },
+    "/academic_years/{yearId}/payments/{paymentId}": {
+      "schema": "Payment",
+      "description": "Koleksi data transaksi pembayaran per tahun ajaran"
+    },
+    "/academic_years/{yearId}/classes/{classId}": {
+      "schema": "Class",
+      "description": "Koleksi daftar kelas per tahun ajaran"
+    },
+    "/students/{studentId}": {
+      "schema": "Student",
+      "description": "Koleksi data siswa (legacy)"
+    },
+    "/payments/{paymentId}": {
+      "schema": "Payment",
+      "description": "Koleksi data transaksi pembayaran (legacy)"
+    },
+    "/classes/{classId}": {
+      "schema": "Class",
+      "description": "Koleksi daftar kelas (legacy)"
+    },
+    "/settings/{settingId}": {
+      "schema": "SystemSettings",
+      "description": "Koleksi konfigurasi sistem"
+    }
+  }
+}
