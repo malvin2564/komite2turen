@@ -1046,7 +1046,9 @@ function StudentsView({ students, classes, selectedYearId, activeYear, academicY
     previousClasses: {
       class7: '',
       class8: ''
-    }
+    },
+    isAlumni: false,
+    graduatedYear: ''
   });
 
   useEffect(() => {
@@ -1074,7 +1076,9 @@ function StudentsView({ students, classes, selectedYearId, activeYear, academicY
         isTransfer: editingStudent.isTransfer || false,
         transferDate: editingStudent.transferDate || '',
         customMonthlyAmount: editingStudent.customMonthlyAmount || 0,
-        previousClasses: editingStudent.previousClasses || { class7: '', class8: '' }
+        previousClasses: editingStudent.previousClasses || { class7: '', class8: '' },
+        isAlumni: editingStudent.isAlumni || false,
+        graduatedYear: editingStudent.graduatedYear || ''
       });
       setIsModalOpen(true);
     }
@@ -1106,7 +1110,7 @@ function StudentsView({ students, classes, selectedYearId, activeYear, academicY
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validateClassEntry()) return;
+    if (!formData.isAlumni && !validateClassEntry()) return;
 
     if (!editingStudent && students.some(s => s.nis === formData.nis)) {
       setAlertMsg("NIS sudah terdaftar. Silakan gunakan NIS lain.");
@@ -1124,14 +1128,28 @@ function StudentsView({ students, classes, selectedYearId, activeYear, academicY
         if (editingStudent.isAlumni) {
           await updateDoc(doc(db, 'alumni', editingStudent.id), studentData);
         } else {
-          await updateDoc(doc(yearRef, 'students', editingStudent.id), studentData);
+          // Jika status diubah menjadi lulus atau ditandai alumni saat diedit
+          if (formData.isAlumni || formData.status === 'lulus') {
+            await setDoc(doc(db, 'alumni', editingStudent.id), { ...studentData, isAlumni: true, status: 'lulus' });
+            await deleteDoc(doc(yearRef, 'students', editingStudent.id));
+          } else {
+            await updateDoc(doc(yearRef, 'students', editingStudent.id), studentData);
+          }
         }
       } else {
-        // Use NIS as document ID
-        await setDoc(doc(yearRef, 'students', formData.nis), {
-          ...studentData,
-          createdAt: serverTimestamp()
-        });
+        if (formData.isAlumni) {
+          await setDoc(doc(db, 'alumni', formData.nis), {
+            ...studentData,
+            createdAt: serverTimestamp(),
+            status: 'lulus'
+          });
+        } else {
+          // Use NIS as document ID
+          await setDoc(doc(yearRef, 'students', formData.nis), {
+            ...studentData,
+            createdAt: serverTimestamp()
+          });
+        }
       }
       closeModal();
     } catch (err) {
@@ -1213,7 +1231,9 @@ function StudentsView({ students, classes, selectedYearId, activeYear, academicY
       }, 
       arrearsMonths: 0, isActive: true, 
       isTransfer: false, transferDate: '', customMonthlyAmount: 0,
-      previousClasses: { class7: '', class8: '' }
+      previousClasses: { class7: '', class8: '' },
+      isAlumni: studentTab === 'alumni',
+      graduatedYear: ''
     });
   };
 
@@ -1650,7 +1670,10 @@ function StudentsView({ students, classes, selectedYearId, activeYear, academicY
             <span className="hidden sm:inline">Impor</span>
           </button>
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => {
+              setFormData(prev => ({ ...prev, isAlumni: studentTab === 'alumni' }));
+              setIsModalOpen(true);
+            }}
             className="btn btn-primary px-4"
           >
             <UserPlus size={18} />
@@ -1829,15 +1852,26 @@ function StudentsView({ students, classes, selectedYearId, activeYear, academicY
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-[11px] font-bold text-text-muted uppercase tracking-wider mb-2">Kelas</label>
-                  <select
-                    required
-                    className="input-field"
-                    value={formData.class}
-                    onChange={e => setFormData({...formData, class: e.target.value})}
-                  >
-                    <option value="">Pilih Kelas</option>
-                    {classes.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                  </select>
+                  {formData.isAlumni ? (
+                    <input
+                      required
+                      type="text"
+                      className="input-field"
+                      placeholder="Contoh: 9A"
+                      value={formData.class}
+                      onChange={e => setFormData({...formData, class: e.target.value})}
+                    />
+                  ) : (
+                    <select
+                      required
+                      className="input-field"
+                      value={formData.class}
+                      onChange={e => setFormData({...formData, class: e.target.value})}
+                    >
+                      <option value="">Pilih Kelas</option>
+                      {classes.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-text-muted uppercase tracking-wider mb-2">Status</label>
@@ -1854,7 +1888,7 @@ function StudentsView({ students, classes, selectedYearId, activeYear, academicY
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
                 <div className="flex items-center gap-3 pt-6">
                   <input
                     type="checkbox"
@@ -1863,7 +1897,7 @@ function StudentsView({ students, classes, selectedYearId, activeYear, academicY
                     checked={formData.isTransfer}
                     onChange={e => setFormData({...formData, isTransfer: e.target.checked})}
                   />
-                  <label htmlFor="isTransfer" className="text-xs font-semibold text-text-main uppercase tracking-tight">Siswa Pindahan</label>
+                  <label htmlFor="isTransfer" className="text-xs font-semibold text-text-main uppercase tracking-tight">Pindahan</label>
                 </div>
                 <div className="flex items-center gap-3 pt-6">
                   <input
@@ -1873,7 +1907,7 @@ function StudentsView({ students, classes, selectedYearId, activeYear, academicY
                     checked={formData.isActive}
                     onChange={e => setFormData({...formData, isActive: e.target.checked})}
                   />
-                  <label htmlFor="isActive" className="text-xs font-semibold text-text-main uppercase tracking-tight">Siswa Aktif</label>
+                  <label htmlFor="isActive" className="text-xs font-semibold text-text-main uppercase tracking-tight">Aktif</label>
                 </div>
                 <div className="flex items-center gap-3 pt-6">
                   <input
@@ -1885,7 +1919,38 @@ function StudentsView({ students, classes, selectedYearId, activeYear, academicY
                   />
                   <label htmlFor="ikutRekreasi" className="text-xs font-semibold text-text-main uppercase tracking-tight">Ikut Rekreasi</label>
                 </div>
+                <div className="flex items-center gap-3 pt-6">
+                  <input
+                    type="checkbox"
+                    id="isAlumni"
+                    className="w-4 h-4 rounded border-border text-amber-500 focus:ring-amber-500"
+                    checked={formData.isAlumni}
+                    onChange={e => setFormData({...formData, isAlumni: e.target.checked, status: e.target.checked ? 'lulus' : formData.status})}
+                  />
+                  <label htmlFor="isAlumni" className="text-xs font-semibold text-text-main uppercase tracking-tight">Siswa Alumni</label>
+                </div>
               </div>
+
+              {formData.isAlumni && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 rounded-xl border border-amber-200 bg-amber-50/50">
+                  <div>
+                    <label className="block text-[11px] font-bold text-amber-800 uppercase tracking-wider mb-2">Tahun Lulus</label>
+                    <input
+                      required={formData.isAlumni}
+                      type="text"
+                      placeholder="Contoh: 2023"
+                      className="input-field border-amber-200 focus:border-amber-400 focus:ring-amber-400"
+                      value={formData.graduatedYear}
+                      onChange={e => setFormData({...formData, graduatedYear: e.target.value})}
+                    />
+                  </div>
+                  <div className="flex items-center">
+                    <p className="text-xs text-amber-700 italic">
+                      Jika status alumni dicentang, data ini tidak akan tampil sebagai siswa berjalan dan otomatis tersimpan di dalam data lulusan. Data tagihannya pun akan tetap tersimpan berdasarkan isian di bawah.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {formData.isTransfer && (
                 <div className="flex flex-col gap-2 col-span-1 md:col-span-3">
