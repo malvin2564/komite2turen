@@ -866,8 +866,8 @@ function DashboardView({ students, payments, activeYear }: { students: Student[]
                     <span className="badge badge-slate">
                       {p.type === 'full' ? 'Penuh' : 
                        p.type === 'arrears' ? 'Tunggakan' : 
-                       p.type === 'noRekreasi' ? 'Tanpa Tabungan' : 
-                       p.type === 'onlyRekreasi' ? 'Hanya Tabungan' : p.type}
+                       p.type === 'noRekreasi' ? 'Tanpa Rekreasi' : 
+                       p.type === 'onlyRekreasi' ? 'Hanya Rekreasi' : p.type}
                     </span>
                   </td>
                   <td className="py-4 text-right">
@@ -1047,6 +1047,7 @@ function StudentsView({ students, classes, selectedYearId, activeYear, academicY
     },
     arrearsMonths: 0,
     isActive: true,
+    ikutRekreasi: true,
     isTransfer: false,
     transferDate: '',
     customMonthlyAmount: 0,
@@ -1080,6 +1081,7 @@ function StudentsView({ students, classes, selectedYearId, activeYear, academicY
         },
         arrearsMonths: editingStudent.arrearsMonths || 0,
         isActive: editingStudent.isActive !== undefined ? editingStudent.isActive : true,
+        ikutRekreasi: editingStudent.ikutRekreasi !== undefined ? editingStudent.ikutRekreasi : true,
         isTransfer: editingStudent.isTransfer || false,
         transferDate: editingStudent.transferDate || '',
         customMonthlyAmount: editingStudent.customMonthlyAmount || 0,
@@ -1241,7 +1243,7 @@ function StudentsView({ students, classes, selectedYearId, activeYear, academicY
         class8: { months: defaultMonths, monthlyRate: defaultMonthly, total: defaultTotal }, 
         class9: { months: defaultMonths, monthlyRate: defaultMonthly, total: defaultTotal } 
       }, 
-      arrearsMonths: defaultMonths * 3, isActive: true, 
+      arrearsMonths: defaultMonths * 3, isActive: true, ikutRekreasi: true,
       isTransfer: false, transferDate: '', customMonthlyAmount: 0,
       previousClasses: { class7: '', class8: '' },
       isAlumni,
@@ -2056,15 +2058,15 @@ function StudentsView({ students, classes, selectedYearId, activeYear, academicY
                             return { ...prev, arrears: newArrears };
                         });
                         
-                        const prevMsg = (gradePrefix === '8' || gradePrefix === '9') ? ' Tagihan tunggakan riwayat kelas sebelumnya (kelas 7/8) juga telah di-reset untuk dikenakan kewajiban Tabungan saja.' : '';
-                        setAlertMsg(`Sukses! Selama ${monthsMissed} bulan pertama siswa hanya akan ditagih Tabungan. Total Tunggakan setahun disesuaikan menjadi Rp ${newTotal.toLocaleString('id-ID')}.${prevMsg} (Cek Detail Tunggakan)`);
+                        const prevMsg = (gradePrefix === '8' || gradePrefix === '9') ? ' Tagihan tunggakan riwayat kelas sebelumnya (kelas 7/8) juga telah di-reset untuk dikenakan kewajiban Rekreasi saja.' : '';
+                        setAlertMsg(`Sukses! Selama ${monthsMissed} bulan pertama siswa hanya akan ditagih Rekreasi. Total Tunggakan setahun disesuaikan menjadi Rp ${newTotal.toLocaleString('id-ID')}.${prevMsg} (Cek Detail Tunggakan)`);
                       }}
                       className="btn btn-secondary text-xs whitespace-nowrap bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200"
                     >
                       Kalkulasi Otomatis Diskon Bulan
                     </button>
                   </div>
-                  <p className="text-[10px] text-text-muted mt-1">Gunakan tombol kalkulasi agar siswa hanya ditagih komponen Tabungan pada bulan-bulan sebelum jadwal ia masuk (contoh: Pindah bulan Sept, maka tagihan Komite Juli-Agts di-Nol-kan).</p>
+                  <p className="text-[10px] text-text-muted mt-1">Gunakan tombol kalkulasi agar siswa hanya ditagih komponen Rekreasi pada bulan-bulan sebelum jadwal ia masuk (contoh: Pindah bulan Sept, maka tagihan Komite Juli-Agts di-Nol-kan).</p>
                 </div>
               )}
 
@@ -3165,8 +3167,8 @@ function PaymentView({ students, activeYear, isAdmin }: { students: Student[], a
               <div className="grid grid-cols-1 gap-3">
                 {[
                   { id: 'full', label: 'Bayar Penuh', amount: 150000 },
-                  { id: 'noRekreasi', label: 'Tanpa Tabungan', amount: 120000 },
-                  { id: 'onlyRekreasi', label: 'Hanya Tabungan', amount: 30000 },
+                  { id: 'noRekreasi', label: 'Tanpa Rekreasi', amount: 120000 },
+                  { id: 'onlyRekreasi', label: 'Hanya Rekreasi', amount: 30000 },
                   { id: 'arrears', label: 'Bayar Tunggakan', amount: 0 },
                 ].filter(type => {
                   if (selectedStudent?.status === 'yatim') {
@@ -3346,7 +3348,7 @@ function PaymentView({ students, activeYear, isAdmin }: { students: Student[], a
                   <div className="p-6 border-2 border-dashed border-border rounded-xl text-center hover:border-accent/40 transition-colors">
                     <FileText className="mx-auto text-text-muted mb-3" size={32} />
                     <p className="text-sm text-text-muted mb-2">Unggah file CSV sesuai template kami</p>
-                    <p className="text-xs text-text-muted mb-4 font-mono px-4 text-left border-l-2 border-accent bg-slate-50 py-2">Info: Kolom <span className="font-bold">tunggakan</span> (\"7\", \"8\", \"9\") dan <span className="font-bold">rekreasi</span> (\"tr\" untuk tanpa tabungan, \"rs\" untuk hanya tabungan)</p>
+                    <p className="text-xs text-text-muted mb-4 font-mono px-4 text-left border-l-2 border-accent bg-slate-50 py-2">Info: Kolom <span className="font-bold">tunggakan</span> (\"7\", \"8\", \"9\") dan <span className="font-bold">rekreasi</span> (\"tr\" untuk tanpa rekreasi, \"rs\" untuk hanya rekreasi)</p>
                     <label className="inline-block px-6 py-2 bg-accent text-white rounded-lg font-bold text-[11px] uppercase tracking-widest cursor-pointer hover:bg-blue-700 shadow-md shadow-accent/10 transition-all">
                       Pilih File
                       <input type="file" accept=".csv" className="hidden" onChange={handleImportPayments} />
@@ -4013,7 +4015,7 @@ function AcademicMonthlyReport({ payments, activeYear, category, endDate }: { pa
     { name: 'Juni', value: 5 }
   ];
 
-  const allocations = [...activeYear.allocations].sort((a, b) => b.priority - a.priority);
+  const allocations = [...activeYear.allocations].sort((a, b) => a.priority - b.priority);
 
   // Group by month value (0-11)
   const groupedByMonth: Record<number, { allocations: Record<string, number>, total: number }> = {};
@@ -4125,7 +4127,7 @@ function ClassArrearsReport({ students, selectedClass, activeYear }: { students:
     }
     if (student.status === 'yatim') {
       const tabungan = activeYear.allocations.find(a => a.isTabungan)?.amount || 0;
-      return `Hanya bayar tabungan rekreasi Rp${formatNum(tabungan)},-`;
+      return `Hanya bayar rekreasi Rp${formatNum(tabungan)},-`;
     }
     return '';
   };
@@ -4229,7 +4231,7 @@ function ClassArrearsReport({ students, selectedClass, activeYear }: { students:
         </div>
         <div className="flex items-center gap-2 mb-1">
           <div className="w-6 h-4 border border-black bg-[#d9d9d9]"></div>
-          <span>Anak Yatim/Yatim Piatu hanya kurang bayar tabungan rekreasi</span>
+          <span>Anak Yatim/Yatim Piatu hanya kurang bayar rekreasi</span>
         </div>
         <div className="flex items-center gap-2 mb-4">
           <div className="w-6 h-4 border border-black bg-[#70ad47]"></div>
@@ -5347,7 +5349,7 @@ function SettingsView({ settings, activeYear, academicYears, selectedYearId, stu
                     }}
                     className="w-4 h-4 rounded border-border text-accent focus:ring-accent"
                   />
-                  <span className="text-[10px] font-bold text-text-muted uppercase">Tabungan</span>
+                  <span className="text-[10px] font-bold text-text-muted uppercase">Rekreasi</span>
                 </label>
                 <button 
                   onClick={() => removeItem(a.id)}
@@ -5390,7 +5392,7 @@ function SettingsView({ settings, activeYear, academicYears, selectedYearId, stu
                   onChange={e => setNewItem({ ...newItem, isTabungan: e.target.checked })}
                   className="w-4 h-4 rounded border-border text-accent focus:ring-accent"
                 />
-                <span className="text-[10px] font-bold text-text-muted uppercase">Tabungan</span>
+                <span className="text-[10px] font-bold text-text-muted uppercase">Rekreasi</span>
               </label>
               <button 
                 onClick={addItem}
