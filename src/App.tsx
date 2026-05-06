@@ -213,6 +213,13 @@ const getArrearsDisplay = (student: Student, classGrade: 'class7'|'class8'|'clas
   const totalDebt12 = typeof detail === 'number' ? detail : detail.total || 0;
   const monthlyRate = typeof detail === 'number' ? 150000 : detail.monthlyRate || 150000;
   
+  if (student.isAlumni || student.status === 'lulus') {
+      return {
+          total: totalDebt12,
+          months: typeof detail === 'number' ? (monthlyRate > 0 ? totalDebt12 / monthlyRate : 0) : detail.months || 0
+      };
+  }
+
   const currentClassPrefix = student.class ? student.class.charAt(0) : '';
   const isCurrentClass = currentClassPrefix === classGrade.replace('class', '');
   
@@ -227,7 +234,7 @@ const getArrearsDisplay = (student: Student, classGrade: 'class7'|'class8'|'clas
   } else {
       return {
           total: totalDebt12,
-          months: typeof detail === 'number' ? totalDebt12 / monthlyRate : detail.months || 0
+          months: typeof detail === 'number' ? (monthlyRate > 0 ? totalDebt12 / monthlyRate : 0) : detail.months || 0
       };
   }
 };
@@ -1222,17 +1229,22 @@ function StudentsView({ students, classes, selectedYearId, activeYear, academicY
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingStudent(null);
+    const isAlumni = studentTab === 'alumni';
+    const defaultMonthly = activeYear?.defaultMonthlyAmount || 150000;
+    const defaultMonths = isAlumni ? 12 : 0;
+    const defaultTotal = defaultMonths * defaultMonthly;
+
     setFormData({ 
       nis: '', name: '', class: '', status: 'regular', discountAmount: 0, 
       arrears: { 
-        class7: { months: 0, monthlyRate: 150000, total: 0 }, 
-        class8: { months: 0, monthlyRate: 150000, total: 0 }, 
-        class9: { months: 0, monthlyRate: 150000, total: 0 } 
+        class7: { months: defaultMonths, monthlyRate: defaultMonthly, total: defaultTotal }, 
+        class8: { months: defaultMonths, monthlyRate: defaultMonthly, total: defaultTotal }, 
+        class9: { months: defaultMonths, monthlyRate: defaultMonthly, total: defaultTotal } 
       }, 
-      arrearsMonths: 0, isActive: true, 
+      arrearsMonths: defaultMonths * 3, isActive: true, 
       isTransfer: false, transferDate: '', customMonthlyAmount: 0,
       previousClasses: { class7: '', class8: '' },
-      isAlumni: studentTab === 'alumni',
+      isAlumni,
       graduatedYear: ''
     });
   };
@@ -1671,7 +1683,21 @@ function StudentsView({ students, classes, selectedYearId, activeYear, academicY
           </button>
           <button
             onClick={() => {
-              setFormData(prev => ({ ...prev, isAlumni: studentTab === 'alumni' }));
+              const isAlumni = studentTab === 'alumni';
+              const defaultMonthly = activeYear?.defaultMonthlyAmount || 150000;
+              const defaultMonths = isAlumni ? 12 : 0;
+              const defaultTotal = defaultMonths * defaultMonthly;
+
+              setFormData(prev => ({ 
+                ...prev, 
+                isAlumni,
+                arrears: {
+                  class7: { months: defaultMonths, monthlyRate: defaultMonthly, total: defaultTotal },
+                  class8: { months: defaultMonths, monthlyRate: defaultMonthly, total: defaultTotal },
+                  class9: { months: defaultMonths, monthlyRate: defaultMonthly, total: defaultTotal }
+                },
+                arrearsMonths: defaultMonths * 3
+              }));
               setIsModalOpen(true);
             }}
             className="btn btn-primary px-4"
@@ -2517,6 +2543,7 @@ function PaymentView({ students, activeYear, isAdmin }: { students: Student[], a
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [amount, setAmount] = useState(0);
+  const [paymentMonths, setPaymentMonths] = useState<number | ''>('');
   const [paymentType, setPaymentType] = useState<PaymentType>('full');
   const [arrearsClass, setArrearsClass] = useState<'class7' | 'class8' | 'class9'>('class7');
   const [isPrevious, setIsPrevious] = useState(false);
@@ -2584,9 +2611,14 @@ function PaymentView({ students, activeYear, isAdmin }: { students: Student[], a
     return base;
   };
 
-  const calculateAllocations = (total: number, type: PaymentType, student: Student, argArrearsClass?: 'class7' | 'class8' | 'class9') => {
-    const monthlyBase = getMonthlyAmount(student, type, argArrearsClass);
-    const months = total / monthlyBase;
+  const calculateAllocations = (total: number, type: PaymentType, student: Student, argArrearsClass?: 'class7' | 'class8' | 'class9', overrideMonths?: number) => {
+    let monthlyBase = getMonthlyAmount(student, type, argArrearsClass);
+    let months = total / monthlyBase;
+
+    if (overrideMonths && overrideMonths > 0) {
+      months = overrideMonths;
+      monthlyBase = total / months;
+    }
     
     const allocationsToUse = student.status === 'lulus' && student.historicalAllocations 
       ? student.historicalAllocations 
@@ -2614,14 +2646,14 @@ function PaymentView({ students, activeYear, isAdmin }: { students: Student[], a
       sortedAllocations.forEach(a => {
         if (a.isTabungan) {
           if (hasRekreasi) {
-            monthlyAlloc[a.id] = a.amount;
-            remaining -= a.amount;
+            monthlyAlloc[a.id] = Math.max(0, Math.min(a.amount, remaining));
+            remaining -= monthlyAlloc[a.id];
           } else {
             monthlyAlloc[a.id] = 0;
           }
         } else if (a.id !== 'komite') { // Komite is usually the remainder
-          monthlyAlloc[a.id] = a.amount;
-          remaining -= a.amount;
+          monthlyAlloc[a.id] = Math.max(0, Math.min(a.amount, remaining));
+          remaining -= monthlyAlloc[a.id];
         }
       });
 
@@ -2649,19 +2681,23 @@ function PaymentView({ students, activeYear, isAdmin }: { students: Student[], a
     e.preventDefault();
     if (!selectedStudent) return;
 
-    const monthlyBase = getMonthlyAmount(selectedStudent, paymentType);
-    
-    if (paymentType === 'arrears' && amount % monthlyBase !== 0) {
-      setAlertMsg(`Jumlah pembayaran tunggakan tidak valid. Harus kelipatan dari ${formatCurrency(monthlyBase)} (pembayaran harus bulat per bulan).`);
-      return;
+    let monthlyBase = getMonthlyAmount(selectedStudent, paymentType);
+    let months = amount / monthlyBase;
+
+    if (paymentMonths && paymentMonths > 0) {
+      months = typeof paymentMonths === 'string' ? parseInt(paymentMonths) : paymentMonths;
+      monthlyBase = amount / months;
+    } else {
+      if (paymentType === 'arrears' && amount % monthlyBase !== 0) {
+        setAlertMsg(`Jumlah pembayaran tunggakan tidak valid. Harus kelipatan dari ${formatCurrency(monthlyBase)} (pembayaran harus bulat per bulan).`);
+        return;
+      }
+      
+      if (paymentType !== 'arrears' && amount % monthlyBase !== 0) {
+        setAlertMsg(`Jumlah pembayaran tidak valid. Harus kelipatan dari ${formatCurrency(monthlyBase)} (pembayaran harus bulat per bulan).`);
+        return;
+      }
     }
-    
-    if (paymentType !== 'arrears' && amount % monthlyBase !== 0) {
-      setAlertMsg(`Jumlah pembayaran tidak valid. Harus kelipatan dari ${formatCurrency(monthlyBase)} (pembayaran harus bulat per bulan).`);
-      return;
-    }
-    
-    const months = amount / monthlyBase;
 
     try {
       const yearRef = doc(db, 'academic_years', activeYear.id);
@@ -2677,7 +2713,7 @@ function PaymentView({ students, activeYear, isAdmin }: { students: Student[], a
         type: paymentType,
         arrearsClass: paymentType === 'arrears' ? arrearsClass : null,
         isPreviousBalance: isPrevious || paymentType === 'arrears',
-        allocations: calculateAllocations(amount, paymentType, selectedStudent),
+        allocations: calculateAllocations(amount, paymentType, selectedStudent, paymentType === 'arrears' ? arrearsClass : undefined, months),
         createdAt: serverTimestamp()
       });
 
@@ -2923,8 +2959,13 @@ function PaymentView({ students, activeYear, isAdmin }: { students: Student[], a
           parsedDate = new Date(); // fallback
         }
 
-        const monthlyBase = getMonthlyAmount(student, paymentType, arrClass || undefined);
-        const allocations = calculateAllocations(amount, paymentType, student, arrClass || undefined);
+        const overrideMonths = months > 0 ? months : undefined;
+        let monthlyBase = getMonthlyAmount(student, paymentType, arrClass || undefined);
+        if (overrideMonths && amount > 0) {
+          monthlyBase = amount / overrideMonths;
+        }
+
+        const allocations = calculateAllocations(amount, paymentType, student, arrClass || undefined, overrideMonths);
 
         parsedPayments.push({
           student,
@@ -3169,6 +3210,7 @@ function PaymentView({ students, activeYear, isAdmin }: { students: Student[], a
                         onClick={() => {
                           setArrearsClass(c as any);
                           setAmount(0); // Reset amount when class changes to avoid confusion
+                          setPaymentMonths('');
                         }}
                         className={cn(
                           "py-2 rounded-lg border text-[10px] font-bold uppercase transition-all",
@@ -3182,24 +3224,37 @@ function PaymentView({ students, activeYear, isAdmin }: { students: Student[], a
                 </div>
               )}
 
-              <div>
-                <label className="block text-[12px] font-bold text-text-muted uppercase tracking-wider mb-3">Jumlah (Rp)</label>
-                <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[12px] font-bold text-text-muted uppercase tracking-wider mb-3">Jumlah Bulan</label>
                   <input
-                    required
                     type="number"
-                    placeholder="0"
-                    className="input-field text-2xl font-bold py-3"
-                    value={amount || ''}
-                    onChange={e => setAmount(Number(e.target.value))}
+                    min="1"
+                    placeholder="Otomatis"
+                    className="input-field text-xl font-bold py-3"
+                    value={paymentMonths || ''}
+                    onChange={e => {
+                      const m = parseInt(e.target.value);
+                      if (!isNaN(m) && m > 0) {
+                        setPaymentMonths(m);
+                        if (selectedStudent) {
+                          setAmount(getMonthlyAmount(selectedStudent, paymentType) * m);
+                        }
+                      } else {
+                        setPaymentMonths('');
+                      }
+                    }}
                   />
                   {selectedStudent && (
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2 mt-3">
                       {[1, 2, 3, 6, 12].map(m => (
                         <button
                           key={m}
                           type="button"
-                          onClick={() => setAmount(getMonthlyAmount(selectedStudent, paymentType) * m)}
+                          onClick={() => {
+                            setPaymentMonths(m);
+                            setAmount(getMonthlyAmount(selectedStudent, paymentType) * m);
+                          }}
                           className="px-3 py-1.5 bg-white border border-border rounded-lg text-[10px] font-bold uppercase hover:bg-slate-50 transition-colors"
                         >
                           {m} Bulan
@@ -3208,13 +3263,33 @@ function PaymentView({ students, activeYear, isAdmin }: { students: Student[], a
                     </div>
                   )}
                 </div>
+
+                <div>
+                  <label className="block text-[12px] font-bold text-text-muted uppercase tracking-wider mb-3">Jumlah Nominal (Rp)</label>
+                  <input
+                    required
+                    type="number"
+                    placeholder="0"
+                    className="input-field text-2xl font-bold py-3"
+                    value={amount || ''}
+                    onChange={e => {
+                      setAmount(Number(e.target.value));
+                      setPaymentMonths('');
+                    }}
+                  />
+                </div>
               </div>
 
               {amount > 0 && selectedStudent && (
                 <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-100">
                   <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-widest mb-1">Perhitungan</p>
                   <p className="text-sm text-text-main">
-                    Mencakup <span className="font-bold">{(amount / getMonthlyAmount(selectedStudent, paymentType)).toFixed(0)} bulan</span> {paymentType === 'arrears' ? 'tunggakan' : 'pembayaran'}.
+                    Mencakup <span className="font-bold">{paymentMonths || (amount / getMonthlyAmount(selectedStudent, paymentType)).toFixed(1)} bulan</span> {paymentType === 'arrears' ? 'tunggakan' : 'pembayaran'}.
+                    {paymentMonths && paymentMonths !== (amount / getMonthlyAmount(selectedStudent, paymentType)) && (
+                      <span className="block mt-1 text-xs text-orange-600">
+                        * Peringatan: Terdapat kustomisasi alokasi bulan ({formatCurrency(amount / Number(paymentMonths))} per bulan).
+                      </span>
+                    )}
                   </p>
                 </div>
               )}
@@ -3840,7 +3915,7 @@ function ReportsView({ payments, students, activeYear, isSupervisor }: { payment
 }
 
 function AcademicSummaryReport({ filteredPayments }: { filteredPayments: Payment[] }) {
-  const formatNum = (num: number) => num.toLocaleString('id-ID');
+  const formatNum = (num: number) => Math.round(num).toLocaleString('id-ID');
   
   const classGroups: Record<string, { total: number, students: Record<string, { name: string, total: number }> }> = {};
   
@@ -3911,7 +3986,7 @@ function AcademicSummaryReport({ filteredPayments }: { filteredPayments: Payment
 }
 
 function AcademicMonthlyReport({ payments, activeYear, category, endDate }: { payments: Payment[], activeYear: AcademicYear, category: string, endDate: string }) {
-  const formatNum = (num: number) => num.toLocaleString('id-ID');
+  const formatNum = (num: number) => Math.round(num).toLocaleString('id-ID');
   
   // Filter payments by category
   const filteredPayments = payments.filter(p => {
@@ -4041,7 +4116,7 @@ function ClassArrearsReport({ students, selectedClass, activeYear }: { students:
     .filter(s => s.class === selectedClass && s.status !== 'lulus')
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  const formatNum = (num: number) => num.toLocaleString('id-ID');
+  const formatNum = (num: number) => Math.round(num).toLocaleString('id-ID');
 
   const getKeterangan = (student: Student) => {
     if (student.status === 'keluar') return 'Siswa Keluar';
