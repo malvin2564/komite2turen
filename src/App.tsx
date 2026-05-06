@@ -2773,6 +2773,14 @@ function PaymentView({ students, activeYear, isAdmin }: { students: Student[], a
       setAlertMsg("Pembayaran berhasil disimpan!");
       setSelectedStudent(null);
       setAmount(0);
+      setSelectedClass('');
+      setSearch('');
+      setTransactionDate(format(new Date(), 'yyyy-MM-dd'));
+      setPaymentType('full');
+      setPaymentMonths('');
+      setArrearsClass('class7');
+      setIsPrevious(false);
+      setTargetType('active');
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, `academic_years/${activeYear.id}/payments`);
     }
@@ -3659,7 +3667,7 @@ function ReportsView({ payments, students, activeYear, isSupervisor }: { payment
                       {idx + 1}
                     </td>
                     <td className="py-4 text-text-muted border-r border-border px-4">
-                      {format(p.date?.toDate ? p.date.toDate() : new Date(p.date), 'dd/MM/yy')}
+                      {format(p.date?.toDate ? p.date.toDate() : new Date(p.date), 'dd/MM/yyyy')}
                     </td>
                     <td className="py-4 font-medium text-text-main border-r border-border px-4">{p.studentName}</td>
                     <td className="py-4 text-text-muted border-r border-border px-4">{p.studentClass}</td>
@@ -3750,7 +3758,7 @@ function ReportsView({ payments, students, activeYear, isSupervisor }: { payment
                             <tr key={p.id} className="text-[13px] hover:bg-slate-50/50 transition-colors">
                               <td className="py-4 px-2 text-center text-text-muted">{idx + 1}</td>
                               <td className="py-4 px-4 text-text-muted">
-                                {format(p.date?.toDate ? p.date.toDate() : new Date(p.date), 'dd/MM/yy HH:mm')}
+                                {format(p.date?.toDate ? p.date.toDate() : new Date(p.date), 'dd/MM/yyyy HH:mm')}
                               </td>
                               <td className="py-4 px-4 text-text-muted text-[11px]">
                                 Tahun {getAcademicYear(p.date?.toDate ? p.date.toDate() : new Date(p.date))}
@@ -3869,7 +3877,7 @@ function ReportsView({ payments, students, activeYear, isSupervisor }: { payment
                       {idx + 1}
                     </td>
                     <td className="py-4 text-text-muted border-r border-border px-4">
-                      {format(p.date?.toDate ? p.date.toDate() : new Date(p.date), 'dd/MM/yy')}
+                      {format(p.date?.toDate ? p.date.toDate() : new Date(p.date), 'dd/MM/yyyy')}
                     </td>
                     <td className="py-4 font-medium text-text-main border-r border-border px-4">{p.studentName}</td>
                     <td className="py-4 text-text-muted border-r border-border px-4">{p.studentClass}</td>
